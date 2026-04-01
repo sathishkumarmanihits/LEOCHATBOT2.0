@@ -9,7 +9,7 @@ from chromadb.utils import embedding_functions
 # 1. Initialize FastAPI
 app = FastAPI()
 
-# 2. CORS Middleware - CRITICAL for GitHub Pages to work
+# 2. CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,7 +19,7 @@ app.add_middleware(
 )
 
 # 3. GLOBAL INITIALIZATION
-# Render will look for "GOOGLE_API_KEY" in your Environment Variables
+# Ensure GOOGLE_API_KEY is set in Render Environment Variables
 api_key = os.getenv("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key)
 
@@ -34,11 +34,12 @@ class Query(BaseModel):
 @app.post("/chat")
 async def chat(query: Query):
     try:
-        # 1. Retrieval: Get the most relevant HITS data
+        # 1. Retrieval
         results = collection.query(query_texts=[query.text], n_results=3)
         context = "\n".join(results['documents'][0])
         
-        # 2. Generation: Using gemini-1.5-flash (The correct model name)
+        # 2. Generation - FIXED MODEL STRING
+        # We use 'gemini-1.5-flash' which is the standard stable ID
         response = client.models.generate_content(
             model="gemini-1.5-flash",
             config={
@@ -49,11 +50,10 @@ async def chat(query: Query):
                 Key Areas:
                 - Specializations: UAV, Satellite Tech, Space Dynamics.
                 - Labs: Supersonic Wind Tunnel (Mach 2.5), ALSIM Flight Simulator, Aircraft Hangars.
-                - Alumni: Provide the link: https://api.hindustanuniv.ac.in/uploads/Prominent_Alumni_03dd0ed53d.pdf
+                - Alumni: https://api.hindustanuniv.ac.in/uploads/Prominent_Alumni_03dd0ed53d.pdf
                 - Placements: Boeing, Airbus, ISRO, and HAL.
                 
                 If the answer isn't in the context, say you specialize in HITS Aeronautical details.
-                Use Markdown formatting (tables and bold text) for technical details.
                 """
             },
             contents=f"Context: {context}\nQuestion: {query.text}"
@@ -62,5 +62,6 @@ async def chat(query: Query):
         return {"response": response.text}
 
     except Exception as e:
-        print(f"Error: {e}")
-        return {"response": "Leo Bot is currently warming up or having trouble accessing the database. Please try again in a moment."}
+        # This will print the specific error in your Render logs
+        print(f"Detailed Error: {str(e)}")
+        return {"response": "Leo Bot is currently warming up. Please try again in 30 seconds."}
