@@ -39,29 +39,28 @@ class Query(BaseModel):
 
 @app.post("/chat")
 async def chat(query: Query):
-    user_input = query.text.lower()
-
-    # --- 🛡️ SAFETY NET FOR DEMO ---
-    if "tunnel" in user_input or "supersonic" in user_input:
-        return {"response": "The HITS Supersonic Wind Tunnel is a state-of-the-art facility with a Mach range of 1.5 to 3.5, used for high-speed aerodynamic research."}
-
     try:
-        # Retrieval
-        results = collection.query(query_texts=[query.text], n_results=3)
+        # 1. SEARCH THE DATABASE (ChromaDB)
+        # This pulls the Aero/Admission data you uploaded to 'hits_knowledge'
+        results = collection.query(query_texts=[query.text], n_results=5) # Increased to 5 for better context
         context = "\n".join(results['documents'][0])
         
-        # 3. Use the ACTIVE 2026 Model: gemini-3.1-flash
+        # 2. GENERATE THE RESPONSE
         response = client.models.generate_content(
-            model="gemini-3.1-flash", 
-            contents=f"System: You are a HITS Aeronautical Expert. Context: {context}\nUser: {query.text}"
+            model="gemini-3.1-flash", # Use the 2026 active model
+            contents=f"Context: {context}\nUser: {query.text}",
+            config={
+                "system_instruction": """
+                You are the HITS Aeronautical and Admissions Expert. 
+                1. Use ONLY the provided context to answer. 
+                2. If the user asks for technical specs (like labs or wind tunnels), ALWAYS provide the data in a Markdown Table.
+                3. For admission details or fees, use Bullet Points for clarity.
+                4. If the info is not in the context, say you specialize in HITS-specific details.
+                """
+            }
         )
         return {"response": response.text}
 
     except Exception as e:
         print(f"Detailed Error: {str(e)}")
-        # FALLBACK: Try gemini-2.5-flash if 3.1 is at capacity
-        try:
-            fallback = client.models.generate_content(model="gemini-2.5-flash", contents=query.text)
-            return {"response": fallback.text}
-        except:
-            return {"response": "Welcome to HITS! Please ask about our Labs or Admissions."}
+        return {"response": "I'm currently retrieving the latest HITS data. Please try again."}
