@@ -5,11 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import google.genai as genai 
 from chromadb.utils import embedding_functions
-from google.genai import types
 
 app = FastAPI()
 
-# 1. HEALTH CHECK: Keeps Render Awake
+# 1. HEALTH CHECK
 @app.get("/")
 async def root():
     return {"status": "online", "bot": "HITS Leo Bot 2.0"}
@@ -29,7 +28,6 @@ client = genai.Client(
 )
 
 try:
-    # Ensure 'hits_vectordb' folder is present in your GitHub
     db_client = chromadb.PersistentClient(path="./hits_vectordb")
     default_ef = embedding_functions.DefaultEmbeddingFunction()
     collection = db_client.get_collection(name="hits_knowledge", embedding_function=default_ef)
@@ -42,7 +40,7 @@ class Query(BaseModel):
 @app.post("/chat")
 async def chat(query: Query):
     try:
-        # A. CASE-INSENSITIVE NORMALIZATION
+        # A. NORMALIZE INPUT
         clean_query = query.text.lower()
 
         # B. SEARCH DATABASE
@@ -52,34 +50,33 @@ async def chat(query: Query):
             include=['documents', 'distances']
         )
         
-        # C. DISTANCE VALIDATION (Stops Hallucinations)
+        # C. DISTANCE VALIDATION
         best_distance = results['distances'][0][0] if results['distances'] else 2.0
-        
-        # If the context is not relevant, return the contact info immediately
         if best_distance > 1.4: 
-            return {"response": "I am sorry, I don't have that information. Please contact **info@hindustanuniv.ac.in** for official details."}
+            return {"response": "I am sorry, I don't have that information. Please contact **info@hindustanuniv.ac.in**."}
 
         context = "\n".join(results['documents'][0])
         
-        # D. GENERATE RESPONSE 
-        # Using a dictionary for config to bypass SDK 'systemInstruction' bugs
+        # D. THE FIX: PROMPT INJECTION (Bypassing the System Instruction Bug)
+        # We put the "Rules" directly into the message so the API cannot fail.
+        full_prompt = f"""
+        INSTRUCTIONS: You are the HITS Official Assistant. 
+        Use ONLY the following context to answer. If the answer isn't there, say you don't know and give info@hindustanuniv.ac.in.
+        
+        CONTEXT:
+        {context}
+        
+        USER QUESTION:
+        {clean_query}
+        """
+
         response = client.models.generate_content(
             model="gemini-3.1-flash", 
-            contents=f"Context: {context}\nUser: {clean_query}",
-            config={
-                "system_instruction": """
-                    You are the HITS Official Assistant. 
-                    1. Use ONLY the provided Context to answer. 
-                    2. If the answer is not in the Context, respond exactly with: 
-                    'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
-                    3. Use Markdown tables for technical specifications and bullets for lists.
-                """,
-                "temperature": 0.1
-            }
+            contents=full_prompt
         )
+        
         return {"response": response.text}
 
     except Exception as e:
-        # This prints the error in your Render logs
         print(f"Detailed Error: {str(e)}")
-        return {"response": "The HITS system is currently busy. Please contact **info@hindustanuniv.ac.in**."}
+        return {"response": "The HITS system is busy. Please contact **info@hindustanuniv.ac.in**."}
