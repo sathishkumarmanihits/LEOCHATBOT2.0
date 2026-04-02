@@ -72,7 +72,7 @@ async def chat(query: Query):
         best_distance = results['distances'][0][0] if results['distances'] else 2.0
         print(f"DEBUG: Search Distance is {best_distance}")
 
-        if best_distance > 1.4: 
+        if best_distance > 1.6: 
             return {"response": "I am sorry, I don't have that information. Please contact **info@hindustanuniv.ac.in**."}
 
         context = "\n".join(results['documents'][0])
