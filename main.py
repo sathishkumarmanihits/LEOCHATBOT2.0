@@ -51,26 +51,33 @@ async def chat(query: Query):
             include=['documents', 'distances']
         )
         
-        # C. DISTANCE VALIDATION (Stops AI from making things up)
+        # C. DISTANCE VALIDATION
+        # If the search result is poor, don't even ask the AI.
         best_distance = results['distances'][0][0] if results['distances'] else 2.0
         
-        # If the search result is poor, don't even ask the AI.
         if best_distance > 1.4: 
-            return {"response": "I couldn't find specific details about that in the HITS database. For official assistance, please contact **info@hindustanuniv.ac.in**."}
+            return {"response": "I am sorry, I don't have that information. Please contact **info@hindustanuniv.ac.in**."}
 
         context = "\n".join(results['documents'][0])
         
         # D. GENERATE RESPONSE
+        # We pass system_instruction as a direct argument to avoid the JSON 400 error.
         response = client.models.generate_content(
-    model="gemini-3.1-flash", 
-    contents=f"Context: {context}\nUser: {clean_query}",
-    config=types.GenerateContentConfig(
-        system_instruction="You are the HITS Official Assistant..."
-    )
-)
+            model="gemini-3.1-flash", 
+            contents=f"Context: {context}\nUser: {clean_query}",
+            system_instruction="""
+                You are the HITS Official Assistant. 
+                1. Use ONLY the provided Context to answer. 
+                2. If specs/labs are mentioned, use a Markdown Table.
+                3. If the answer is not in the Context, respond exactly with: 
+                'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
+            """,
+            config=types.GenerateContentConfig(
+                temperature=0.1, 
+            )
+        )
         return {"response": response.text}
 
     except Exception as e:
         print(f"Error: {str(e)}")
-        # Quick fallback if Gemini 3.1 is busy
         return {"response": "The HITS system is busy. Please contact **info@hindustanuniv.ac.in**."}
