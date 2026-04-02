@@ -1,1 +1,3 @@
-hits_vectordb/
+__pycache__/
+.venv/
+.env
