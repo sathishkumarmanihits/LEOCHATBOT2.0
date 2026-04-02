@@ -25,12 +25,11 @@ app.add_middleware(
 # 2. 2026 API INITIALIZATION
 client = genai.Client(
     api_key=os.getenv("GOOGLE_API_KEY"),
-    # Forces Stable v1 to avoid 404 errors
     http_options={'api_version': 'v1'} 
 )
 
 try:
-    # Ensure this path matches your folder name in GitHub
+    # Ensure 'hits_vectordb' folder is present in your GitHub
     db_client = chromadb.PersistentClient(path="./hits_vectordb")
     default_ef = embedding_functions.DefaultEmbeddingFunction()
     collection = db_client.get_collection(name="hits_knowledge", embedding_function=default_ef)
@@ -54,33 +53,33 @@ async def chat(query: Query):
         )
         
         # C. DISTANCE VALIDATION (Stops Hallucinations)
-        # 0.0 is perfect match, 2.0 is no match. 1.4 is a safe boundary.
         best_distance = results['distances'][0][0] if results['distances'] else 2.0
         
+        # If the context is not relevant, return the contact info immediately
         if best_distance > 1.4: 
             return {"response": "I am sorry, I don't have that information. Please contact **info@hindustanuniv.ac.in** for official details."}
 
         context = "\n".join(results['documents'][0])
         
         # D. GENERATE RESPONSE 
-        # system_instruction is passed as a direct argument to fix the 'systemInstruction' 400 error
+        # Using a dictionary for config to bypass SDK 'systemInstruction' bugs
         response = client.models.generate_content(
             model="gemini-3.1-flash", 
             contents=f"Context: {context}\nUser: {clean_query}",
-            system_instruction="""
-                You are the HITS Official Assistant. 
-                1. Use ONLY the provided Context to answer. 
-                2. If the answer is not in the Context, respond exactly with: 
-                'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
-                3. Use Markdown tables for technical specifications and bullets for lists.
-            """,
-            config=types.GenerateContentConfig(
-                temperature=0.1
-            )
+            config={
+                "system_instruction": """
+                    You are the HITS Official Assistant. 
+                    1. Use ONLY the provided Context to answer. 
+                    2. If the answer is not in the Context, respond exactly with: 
+                    'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
+                    3. Use Markdown tables for technical specifications and bullets for lists.
+                """,
+                "temperature": 0.1
+            }
         )
         return {"response": response.text}
 
     except Exception as e:
-        # Log the error to Render console for debugging
+        # This prints the error in your Render logs
         print(f"Detailed Error: {str(e)}")
         return {"response": "The HITS system is currently busy. Please contact **info@hindustanuniv.ac.in**."}
