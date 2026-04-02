@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import google.genai as genai 
 from chromadb.utils import embedding_functions
+from google.genai import types
 
 app = FastAPI()
 
@@ -61,17 +62,12 @@ async def chat(query: Query):
         
         # D. GENERATE RESPONSE
         response = client.models.generate_content(
-            model="gemini-3.1-flash", 
-            contents=f"Context: {context}\nUser: {clean_query}",
-            config={
-                "system_instruction": """
-                You are the HITS Official Assistant. 
-                1. Use ONLY the provided Context to answer. 
-                2. If specs/labs are mentioned, use a Markdown Table.
-                3. If the answer is not in the Context, say: 'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
-                """
-            }
-        )
+    model="gemini-3.1-flash", 
+    contents=f"Context: {context}\nUser: {clean_query}",
+    config=types.GenerateContentConfig(
+        system_instruction="You are the HITS Official Assistant..."
+    )
+)
         return {"response": response.text}
 
     except Exception as e:
