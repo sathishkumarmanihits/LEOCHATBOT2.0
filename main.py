@@ -9,7 +9,6 @@ from google.genai import types
 
 app = FastAPI()
 
-# 1. HEALTH CHECK: Keeps Render Awake
 @app.get("/")
 async def root():
     return {"status": "online", "bot": "HITS Leo Bot 2.0"}
@@ -22,7 +21,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. 2026 API INITIALIZATION
 client = genai.Client(
     api_key=os.getenv("GOOGLE_API_KEY"),
     http_options={'api_version': 'v1'} 
@@ -52,7 +50,6 @@ async def chat(query: Query):
         )
         
         # C. DISTANCE VALIDATION
-        # If the search result is poor, don't even ask the AI.
         best_distance = results['distances'][0][0] if results['distances'] else 2.0
         
         if best_distance > 1.4: 
@@ -60,23 +57,20 @@ async def chat(query: Query):
 
         context = "\n".join(results['documents'][0])
         
-        # D. GENERATE RESPONSE
-        # We pass system_instruction as a direct argument to avoid the JSON 400 error.
-        # 2. Update your function call
-response = client.models.generate_content(
-    model="gemini-3.1-flash", 
-    contents=f"Context: {context}\nUser: {clean_query}",
-    # MOVE IT HERE:
-    config=types.GenerateContentConfig(
-        system_instruction="""
-            You are the HITS Official Assistant. 
-            1. Use ONLY the provided Context to answer. 
-            2. If the answer is not in the Context, respond with: 
-            'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
-        """,
-        temperature=0.1  # Optional: keeps the bot more factual
-    )
-)
+        # D. GENERATE RESPONSE (Fixed Indentation)
+        response = client.models.generate_content(
+            model="gemini-3.1-flash", 
+            contents=f"Context: {context}\nUser: {clean_query}",
+            config=types.GenerateContentConfig(
+                system_instruction="""
+                    You are the HITS Official Assistant. 
+                    1. Use ONLY the provided Context to answer. 
+                    2. If the answer is not in the Context, respond with: 
+                    'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
+                """,
+                temperature=0.1
+            )
+        )
         return {"response": response.text}
 
     except Exception as e:
