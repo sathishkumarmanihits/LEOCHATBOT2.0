@@ -62,20 +62,21 @@ async def chat(query: Query):
         
         # D. GENERATE RESPONSE
         # We pass system_instruction as a direct argument to avoid the JSON 400 error.
-        response = client.models.generate_content(
-            model="gemini-3.1-flash", 
-            contents=f"Context: {context}\nUser: {clean_query}",
-            system_instruction="""
-                You are the HITS Official Assistant. 
-                1. Use ONLY the provided Context to answer. 
-                2. If specs/labs are mentioned, use a Markdown Table.
-                3. If the answer is not in the Context, respond exactly with: 
-                'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
-            """,
-            config=types.GenerateContentConfig(
-                temperature=0.1, 
-            )
-        )
+        # 2. Update your function call
+response = client.models.generate_content(
+    model="gemini-3.1-flash", 
+    contents=f"Context: {context}\nUser: {clean_query}",
+    # MOVE IT HERE:
+    config=types.GenerateContentConfig(
+        system_instruction="""
+            You are the HITS Official Assistant. 
+            1. Use ONLY the provided Context to answer. 
+            2. If the answer is not in the Context, respond with: 
+            'I am sorry, I don't have that information. Please contact info@hindustanuniv.ac.in.'
+        """,
+        temperature=0.1  # Optional: keeps the bot more factual
+    )
+)
         return {"response": response.text}
 
     except Exception as e:
