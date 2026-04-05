@@ -92,10 +92,12 @@ async def chat(query: Query):
         increment_usage()
         clean_query = query.text.lower().strip()
         
-        # A. Handled Exact Greeting
-        greetings = ["hi", "hello", "hey", "start", "greetings", "leo"]
-        if any(word in clean_query for word in greetings):
+        # FIXED GREETING LOGIC: Only triggers if the message is a short greeting
+        # If the user asks a question, it skips this and goes to search
+        if clean_query in ["hi", "hello", "hey", "start", "greetings", "hi leo", "hello leo"]:
             return {"response": EXACT_GREETING}
+
+        # B. Search Vector DB... (Rest of your code)
 
         # B. Search Vector DB
         results = collection.query(
