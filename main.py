@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import time
+
 # --- 1. RENDER SQLITE VERSION FIX ---
 try:
     import pysqlite3
@@ -42,17 +43,16 @@ app.add_middleware(
 )
 
 # --- 4. DUAL API KEY INITIALIZATION ---
-# Add GOOGLE_API_KEY_PRIMARY and GOOGLE_API_KEY_SECONDARY to Render Env Vars
 API_KEYS = [
     os.getenv("GOOGLE_API_KEY_PRIMARY"),
     os.getenv("GOOGLE_API_KEY_SECONDARY")
 ]
 
-# Create multiple clients for failover
 clients = []
 for key in API_KEYS:
     if key:
-        clients.append(genai.Client(api_key=key, http_options={'api_version': 'v1beta'}))
+        # Note: Changed to v1 for standard stable model access
+        clients.append(genai.Client(api_key=key, http_options={'api_version': 'v1'}))
 
 # Initialize Vector DB
 try:
@@ -92,12 +92,9 @@ async def chat(query: Query):
         increment_usage()
         clean_query = query.text.lower().strip()
         
-        # FIXED GREETING LOGIC: Only triggers if the message is a short greeting
-        # If the user asks a question, it skips this and goes to search
+        # A. Handled Exact Greeting - Specific matches only to prevent hijacking questions
         if clean_query in ["hi", "hello", "hey", "start", "greetings", "hi leo", "hello leo"]:
             return {"response": EXACT_GREETING}
-
-       
 
         # B. Search Vector DB
         results = collection.query(
@@ -109,7 +106,8 @@ async def chat(query: Query):
         best_distance = results['distances'][0][0] if results['distances'] else 2.0
         
         # C. Context Construction
-        if best_distance < 1.7:
+        # Slightly increased threshold to 1.8 for better retrieval
+        if best_distance < 1.8:
             context = "\n".join(results['documents'][0])
             persona_prefix = (
                 f"You are Leo Bot, the HITS Expert. {EXACT_GREETING}\n\n"
@@ -119,11 +117,11 @@ async def chat(query: Query):
             )
             full_prompt = f"{persona_prefix}\n\nUser Question: {query.text}"
         else:
-            return {"response": "I'm sorry, I don't have that specific information in my records. Please contact **info@hindustanuniv.ac.in**."}
+            return {"response": "I'm sorry, I don't have that specific information in my records. Please contact **info@hindustanuniv.ac.in** for assistance."}
 
-        # D. Dual-Key & Multi-Model Failover Loop (FIXED)
-        # We use fully qualified names and prioritize stable models
-        model_priority = ["models/gemini-1.5-flash", "models/gemini-1.5-flash-8b"]
+        # D. Dual-Key & Multi-Model Failover Loop
+        # Updated to stable IDs without 'models/' prefix for the standard SDK client
+        model_priority = ["gemini-1.5-flash", "gemini-1.5-pro"]
 
         for client_idx, gen_client in enumerate(clients):
             for model_id in model_priority:
@@ -140,7 +138,6 @@ async def chat(query: Query):
                     error_msg = str(e)
                     logger.error(f"Fail: Client {client_idx}, Model {model_id}: {error_msg}")
                     
-                    # 429 RESOURCE_EXHAUSTED Fix: Wait briefly before trying next key/model
                     if "429" in error_msg:
                         logger.warning("Rate limit hit. Sleeping for 2 seconds...")
                         time.sleep(2)
