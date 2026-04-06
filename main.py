@@ -49,7 +49,7 @@ api_keys = [
 
 # Create a list of clients (filters out None if a key is missing)
 clients = [
-    genai.Client(api_key=key, http_options={'api_version': 'v1'}) 
+    genai.Client(api_key=key, http_options={'api_version': 'v1beta'}) 
     for key in api_keys if key
 ]
 
@@ -99,10 +99,10 @@ async def chat(query: Query):
                 "response": "I'm sorry, I don't have that specific information in my context. Please contact **info@hindustanuniv.ac.in**."
             }
 
-        # 3. DUAL-CLIENT & STABLE MODEL LOOP
+        
         # 3. DUAL-CLIENT & STABLE MODEL LOOP
         # We put 1.5-flash FIRST because it has a MUCH higher quota than 2.0
-        model_priority = ["gemini-1.5-flash", "gemini-1.5-pro"]
+        model_priority = ["models/gemini-1.5-flash", "models/gemini-1.5-pro"]
 
         for i, current_client in enumerate(clients):
             for model_id in model_priority:
@@ -112,16 +112,19 @@ async def chat(query: Query):
                         model=model_id,
                         contents=full_prompt
                     )
-                    if response:
+                    
+                    if response and response.text:
                         return {"response": response.text}
+                        
                 except Exception as e:
                     error_msg = str(e)
                     logger.warning(f"Client {i+1} - {model_id} failed: {error_msg}")
                     
-                    # If we get a 429, wait 2 seconds before trying the next key
+                    # 429 is the "Resource Exhausted" error (Wait 1 sec and try next key)
                     if "429" in error_msg:
-                        logger.info("Rate limit hit. Pausing for 2 seconds...")
-                        time.sleep(2) 
+                        time.sleep(1) 
+                    
+                    # 404 is the "Not Found" error (Continue to next model)
                     continue
 
         return {"response": "The HITS system is currently busy (All API keys exhausted). Please contact **info@hindustanuniv.ac.in**."}
