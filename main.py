@@ -100,11 +100,11 @@ async def chat(query: Query):
             }
 
         # 3. DUAL-CLIENT & STABLE MODEL LOOP
-        model_priority = ["gemini-1.5-flash", "gemini-2.0-flash"]
+        # 3. DUAL-CLIENT & STABLE MODEL LOOP
+        # We put 1.5-flash FIRST because it has a MUCH higher quota than 2.0
+        model_priority = ["gemini-1.5-flash", "gemini-1.5-pro"]
 
-        # Outer loop iterates through API Keys (Clients)
         for i, current_client in enumerate(clients):
-            # Inner loop iterates through Models
             for model_id in model_priority:
                 try:
                     logger.info(f"Attempting Client {i+1} with {model_id}")
@@ -115,8 +115,14 @@ async def chat(query: Query):
                     if response:
                         return {"response": response.text}
                 except Exception as e:
-                    logger.warning(f"Client {i+1} - Model {model_id} failed: {e}")
-                    continue # Try the next model or the next client
+                    error_msg = str(e)
+                    logger.warning(f"Client {i+1} - {model_id} failed: {error_msg}")
+                    
+                    # If we get a 429, wait 2 seconds before trying the next key
+                    if "429" in error_msg:
+                        logger.info("Rate limit hit. Pausing for 2 seconds...")
+                        time.sleep(2) 
+                    continue
 
         return {"response": "The HITS system is currently busy (All API keys exhausted). Please contact **info@hindustanuniv.ac.in**."}
 
